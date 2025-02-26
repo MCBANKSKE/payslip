@@ -23,10 +23,6 @@ CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 # Load configuration from Config class
 app.config.from_object(Config)
 
-# JWT Configuration
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
-
 # Initialize extensions
 db.init_app(app)
 jwt = JWTManager(app)
@@ -49,7 +45,7 @@ def invalid_token_callback(error):
 @jwt.unauthorized_loader
 def missing_token_callback(error):
     return jsonify({
-        'message': 'Request does not contain an access token',
+        'message': 'Missing Authorization Header',
         'error': 'authorization_required'
     }), 401
 
@@ -322,19 +318,35 @@ def login():
         
         if user and check_password_hash(user.password_hash, data['password']):
             access_token = create_access_token(identity=user.id)
+            
+            # Check if user has company profile
+            has_company_profile = bool(CompanyProfile.query.filter_by(user_id=user.id).first())
+            
             return jsonify({
-                'token': access_token,
+                'access_token': access_token,  # Changed from 'token' to 'access_token'
                 'user': {
                     'id': user.id,
                     'username': user.username,
                     'email': user.email
-                }
+                },
+                'has_company_profile': has_company_profile
             }), 200
         
         return jsonify({'message': 'Invalid email or password'}), 401
     except Exception as e:
-        print(f"Login error: {str(e)}")  # Add logging
+        print(f"Login error: {str(e)}")
         return jsonify({'message': 'An error occurred during login'}), 500
+
+@app.route('/api/auth/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    try:
+        # In a more complete implementation, you might want to blacklist the token
+        # For now, we'll just return success since the frontend will remove the token
+        return jsonify({'message': 'Successfully logged out'}), 200
+    except Exception as e:
+        print(f"Error in logout: {str(e)}")
+        return jsonify({'message': 'An error occurred during logout'}), 500
 
 @app.route('/generate-payslip', methods=['POST'])
 def create_payslip():
@@ -622,6 +634,29 @@ def setup_company_profile():
         traceback.print_exc()
         return jsonify({'message': 'An error occurred while saving company profile'}), 500
 
+@app.route('/api/profile/bank', methods=['GET'])
+@jwt_required()
+def get_bank_profile():
+    try:
+        user_id = get_jwt_identity()
+        profile = BankProfile.query.filter_by(user_id=user_id).first()
+        
+        if not profile:
+            return jsonify({'message': 'Bank profile not found'}), 404
+            
+        return jsonify({
+            'profile': {
+                'id': profile.id,
+                'bank_name': profile.bank_name,
+                'account_number': profile.account_number,
+                'branch_code': profile.branch_code,
+                'swift_code': profile.swift_code
+            }
+        }), 200
+    except Exception as e:
+        print(f"Error fetching bank profile: {str(e)}")
+        return jsonify({'message': 'An error occurred while fetching bank profile'}), 500
+
 @app.route('/api/profile/bank', methods=['POST'])
 @jwt_required()
 def setup_bank_profile():
@@ -629,39 +664,54 @@ def setup_bank_profile():
         user_id = get_jwt_identity()
         data = request.get_json()
         
-        # Check if bank profile already exists
-        existing_profile = BankProfile.query.filter_by(user_id=user_id).first()
-        if existing_profile:
-            return jsonify({'message': 'Bank profile already exists'}), 400
-            
-        bank_profile = BankProfile(
-            user_id=user_id,
-            bank_name=data['bankName'],
-            account_number=data['accountNumber'],
-            branch_code=data['branchCode'],
-            swift_code=data['swiftCode']
-        )
+        if not data:
+            return jsonify({'message': 'No data provided'}), 400
+
+        required_fields = ['bankName', 'accountNumber']
+        missing_fields = [field for field in required_fields if not data.get(field)]
         
-        db.session.add(bank_profile)
+        if missing_fields:
+            return jsonify({
+                'message': 'Missing required fields',
+                'fields': missing_fields
+            }), 422
+
+        # Check if bank profile already exists
+        profile = BankProfile.query.filter_by(user_id=user_id).first()
+        
+        if profile:
+            # Update existing profile
+            profile.bank_name = data['bankName']
+            profile.account_number = data['accountNumber']
+            profile.branch_code = data.get('branchCode', '')
+            profile.swift_code = data.get('swiftCode', '')
+        else:
+            # Create new profile
+            profile = BankProfile(
+                user_id=user_id,
+                bank_name=data['bankName'],
+                account_number=data['accountNumber'],
+                branch_code=data.get('branchCode', ''),
+                swift_code=data.get('swiftCode', '')
+            )
+            db.session.add(profile)
+        
         db.session.commit()
         
         return jsonify({
-            'message': 'Bank profile created successfully',
+            'message': 'Bank profile saved successfully',
             'profile': {
-                'id': bank_profile.id,
-                'bank_name': bank_profile.bank_name,
-                'account_number': bank_profile.account_number,
-                'branch_code': bank_profile.branch_code,
-                'swift_code': bank_profile.swift_code
+                'id': profile.id,
+                'bank_name': profile.bank_name,
+                'account_number': profile.account_number,
+                'branch_code': profile.branch_code,
+                'swift_code': profile.swift_code
             }
-        }), 201
-    except KeyError as e:
-        print(f"Missing field error: {str(e)}")
-        return jsonify({'message': f'Missing required field: {str(e)}'}), 400
+        }), 200
     except Exception as e:
         print(f"Bank profile error: {str(e)}")
         db.session.rollback()
-        return jsonify({'message': 'An error occurred while creating bank profile'}), 500
+        return jsonify({'message': 'An error occurred while saving bank profile'}), 500
 
 @app.route('/api/employees', methods=['GET'])
 @jwt_required()

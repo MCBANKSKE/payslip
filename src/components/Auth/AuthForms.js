@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Container, Paper, TextField, Button, Typography, Box, Link, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../../services/api';
 
 export const RegisterForm = () => {
   const [formData, setFormData] = useState({
@@ -128,31 +129,8 @@ export const LoginForm = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to login');
-      }
-
-      // Store the token
-      localStorage.setItem('token', data.access_token);
+      const data = await api.login(email, password);
       
-      // Store user info if available
-      if (data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
-      }
-
       // Redirect based on profile completion
       if (data.has_company_profile) {
         navigate('/dashboard');
@@ -183,6 +161,7 @@ export const LoginForm = () => {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
           />
           <TextField
             fullWidth
@@ -192,6 +171,7 @@ export const LoginForm = () => {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
           />
           <Button
             type="submit"
@@ -201,7 +181,7 @@ export const LoginForm = () => {
             sx={{ mt: 3 }}
             disabled={loading}
           >
-            Sign In
+            {loading ? 'Signing in...' : 'Sign In'}
           </Button>
         </form>
         <Box mt={2} textAlign="center">
