@@ -1,56 +1,44 @@
 import React from 'react';
-import { Container, Typography, Button, Grid, Paper } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { Container, Card, Row, Col, Button } from 'react-bootstrap';
 
 const LandingPage = () => {
-  const navigate = useNavigate();
-
   return (
-    <Container maxWidth="lg">
-      <Grid container spacing={4} style={{ minHeight: '100vh', paddingTop: '64px' }}>
-        <Grid item xs={12} md={6}>
-          <Typography variant="h2" component="h1" gutterBottom>
-            Simplify Your Financial Documentation
-          </Typography>
-          <Typography variant="h5" color="textSecondary" paragraph>
-            Generate professional payslips and bank statements with ease. Perfect for businesses of all sizes.
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item>
-              <Button variant="contained" color="primary" size="large" onClick={() => navigate('/register')}>
-                Get Started
-              </Button>
-            </Grid>
-            <Grid item>
-              <Button variant="outlined" color="primary" size="large" onClick={() => navigate('/login')}>
-                Sign In
-              </Button>
-            </Grid>
-          </Grid>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Paper elevation={3} style={{ padding: '32px', backgroundColor: '#f5f5f5' }}>
-            <Typography variant="h4" gutterBottom>
-              Features
-            </Typography>
-            <Typography variant="body1" paragraph>
-              • Professional Payslip Generation
-            </Typography>
-            <Typography variant="body1" paragraph>
-              • Bank Statement Creation
-            </Typography>
-            <Typography variant="body1" paragraph>
-              • Employee Management System
-            </Typography>
-            <Typography variant="body1" paragraph>
-              • Company Profile Customization
-            </Typography>
-            <Typography variant="body1">
-              • Secure Document Storage
-            </Typography>
-          </Paper>
-        </Grid>
-      </Grid>
+    <Container className="mt-5">
+      <h1 className="text-center mb-5">Welcome to Document Generator</h1>
+      <Row className="justify-content-center">
+        <Col md={5}>
+          <Card className="mb-4 shadow-sm">
+            <Card.Body className="text-center">
+              <Card.Title>Generate Payslip</Card.Title>
+              <Card.Text>
+                Create monthly payslips for employees with customized company details.
+              </Card.Text>
+              <Link to="/payslip">
+                <Button variant="primary">Generate Payslip</Button>
+              </Link>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col md={5}>
+          <Card className="mb-4 shadow-sm">
+            <Card.Body className="text-center">
+              <Card.Title>Generate Bank Statement</Card.Title>
+              <Card.Text>
+                Create bank statements for any period up to 1 year.
+              </Card.Text>
+              <Link to="/bank-statement">
+                <Button variant="primary">Generate Bank Statement</Button>
+              </Link>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+      <div className="text-center mt-4">
+        <Link to="/settings">
+          <Button variant="outline-secondary">Settings</Button>
+        </Link>
+      </div>
     </Container>
   );
 };

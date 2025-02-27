@@ -12,7 +12,8 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemIcon
+  ListItemIcon,
+  Alert
 } from '@mui/material';
 import {
   Description as DescriptionIcon,
@@ -21,197 +22,197 @@ import {
   Settings as SettingsIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 
 const Dashboard = () => {
   const [companyProfile, setCompanyProfile] = useState(null);
   const [recentPayslips, setRecentPayslips] = useState([]);
   const [recentStatements, setRecentStatements] = useState([]);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCompanyProfile();
-    fetchRecentDocuments();
+    fetchData();
   }, []);
 
-  const fetchCompanyProfile = async () => {
+  const fetchData = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/profile/company', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCompanyProfile(data.profile);
+      // Fetch company profile
+      const profileResponse = await api.getCompanyProfile();
+      if (profileResponse?.profile) {
+        setCompanyProfile(profileResponse.profile);
+      }
+
+      // Fetch recent payslips
+      const payslipsResponse = await api.getRecentPayslips();
+      if (payslipsResponse?.payslips) {
+        setRecentPayslips(payslipsResponse.payslips);
+      }
+
+      // Fetch recent statements
+      const statementsResponse = await api.getRecentStatements();
+      if (statementsResponse?.statements) {
+        setRecentStatements(statementsResponse.statements);
       }
     } catch (error) {
-      console.error('Error fetching company profile:', error);
+      console.error('Error fetching dashboard data:', error);
+      setError('Failed to load some dashboard data');
     }
   };
 
-  const fetchRecentDocuments = async () => {
-    try {
-      const [payslipsRes, statementsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/payslips/recent', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        }),
-        fetch('http://localhost:5000/api/statements/recent', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        })
-      ]);
-
-      if (payslipsRes.ok) {
-        const payslipsData = await payslipsRes.json();
-        setRecentPayslips(payslipsData.payslips || []);
-      } else {
-        setRecentPayslips([]);
-      }
-
-      if (statementsRes.ok) {
-        const statementsData = await statementsRes.json();
-        setRecentStatements(statementsData.statements || []);
-      } else {
-        setRecentStatements([]);
-      }
-    } catch (error) {
-      console.error('Error fetching recent documents:', error);
-      setRecentPayslips([]);
-      setRecentStatements([]);
-    }
+  const handleSetupProfile = () => {
+    navigate('/setup-profile');
   };
-
-  const QuickActionCard = ({ title, icon, description, action }) => (
-    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <CardContent sx={{ flexGrow: 1 }}>
-        <Box display="flex" alignItems="center" mb={2}>
-          {icon}
-          <Typography variant="h6" component="div" ml={1}>
-            {title}
-          </Typography>
-        </Box>
-        <Typography variant="body2" color="text.secondary">
-          {description}
-        </Typography>
-      </CardContent>
-      <CardActions>
-        <Button size="small" onClick={action}>
-          Get Started
-        </Button>
-      </CardActions>
-    </Card>
-  );
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
       <Grid container spacing={3}>
-        {/* Welcome Section */}
+        {/* Company Profile Section */}
         <Grid item xs={12}>
           <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h4" gutterBottom>
-              Welcome{companyProfile ? `, ${companyProfile.name}` : ''}
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Manage your payslips and bank statements efficiently
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" component="h2">
+                Company Profile
+              </Typography>
+              {!companyProfile && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSetupProfile}
+                >
+                  Setup Profile
+                </Button>
+              )}
+            </Box>
+            
+            {companyProfile ? (
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1">
+                    <strong>Name:</strong> {companyProfile.name}
+                  </Typography>
+                  <Typography variant="subtitle1">
+                    <strong>Email:</strong> {companyProfile.email}
+                  </Typography>
+                  <Typography variant="subtitle1">
+                    <strong>Phone:</strong> {companyProfile.phone}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1">
+                    <strong>Address:</strong> {companyProfile.address}
+                  </Typography>
+                  {companyProfile.website && (
+                    <Typography variant="subtitle1">
+                      <strong>Website:</strong> {companyProfile.website}
+                    </Typography>
+                  )}
+                </Grid>
+              </Grid>
+            ) : (
+              <Typography variant="body1" color="text.secondary">
+                Please set up your company profile to get started
+              </Typography>
+            )}
           </Paper>
         </Grid>
 
         {/* Quick Actions */}
-        <Grid item xs={12}>
-          <Typography variant="h5" gutterBottom>
-            Quick Actions
-          </Typography>
-          <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} md={3}>
-              <QuickActionCard
-                title="Generate Payslip"
-                icon={<DescriptionIcon color="primary" />}
-                description="Create and manage employee payslips"
-                action={() => navigate('/payslip')}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <QuickActionCard
-                title="Bank Statement"
-                icon={<AccountBalanceIcon color="primary" />}
-                description="Generate bank statements and reports"
-                action={() => navigate('/bank-statement')}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <QuickActionCard
-                title="Employees"
-                icon={<PeopleIcon color="primary" />}
-                description="Manage your employee records"
-                action={() => navigate('/employees')}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <QuickActionCard
-                title="Settings"
-                icon={<SettingsIcon color="primary" />}
-                description="Configure your account settings"
-                action={() => navigate('/settings')}
-              />
-            </Grid>
-          </Grid>
-        </Grid>
-
-        {/* Recent Documents */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Recent Payslips
-            </Typography>
-            <List>
-              {recentPayslips.map((payslip, index) => (
-                <ListItem key={index}>
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" component="h2" gutterBottom>
+                Quick Actions
+              </Typography>
+              <List>
+                <ListItem>
                   <ListItemIcon>
                     <DescriptionIcon />
                   </ListItemIcon>
-                  <ListItemText
-                    primary={`Payslip - ${payslip.employee_name}`}
-                    secondary={new Date(payslip.created_at).toLocaleDateString()}
-                  />
+                  <ListItemText primary="Generate Payslip" />
                 </ListItem>
-              ))}
-              {recentPayslips.length === 0 && (
                 <ListItem>
-                  <ListItemText primary="No recent payslips" />
-                </ListItem>
-              )}
-            </List>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Recent Bank Statements
-            </Typography>
-            <List>
-              {recentStatements.map((statement, index) => (
-                <ListItem key={index}>
                   <ListItemIcon>
                     <AccountBalanceIcon />
                   </ListItemIcon>
-                  <ListItemText
-                    primary={`Statement - ${statement.account_number}`}
-                    secondary={new Date(statement.created_at).toLocaleDateString()}
-                  />
+                  <ListItemText primary="Create Bank Statement" />
                 </ListItem>
-              ))}
-              {recentStatements.length === 0 && (
                 <ListItem>
-                  <ListItemText primary="No recent bank statements" />
+                  <ListItemIcon>
+                    <PeopleIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Manage Employees" />
                 </ListItem>
+              </List>
+            </CardContent>
+            <CardActions>
+              <Button size="small" onClick={() => navigate('/employees')}>
+                View All Actions
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+
+        {/* Recent Payslips */}
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" component="h2" gutterBottom>
+                Recent Payslips
+              </Typography>
+              {recentPayslips.length > 0 ? (
+                <List>
+                  {recentPayslips.map((payslip, index) => (
+                    <ListItem key={index}>
+                      <ListItemIcon>
+                        <DescriptionIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={`${payslip.employee_name}`}
+                        secondary={`Period: ${payslip.period}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No recent payslips
+                </Typography>
               )}
-            </List>
-          </Paper>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Recent Bank Statements */}
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" component="h2" gutterBottom>
+                Recent Bank Statements
+              </Typography>
+              {recentStatements.length > 0 ? (
+                <List>
+                  {recentStatements.map((statement, index) => (
+                    <ListItem key={index}>
+                      <ListItemIcon>
+                        <AccountBalanceIcon />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={`${statement.account_name}`}
+                        secondary={`Date: ${statement.statement_date}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No recent bank statements
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
     </Container>

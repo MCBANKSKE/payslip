@@ -130,13 +130,8 @@ export const LoginForm = () => {
 
     try {
       const data = await api.login(email, password);
-      
-      // Redirect based on profile completion
-      if (data.has_company_profile) {
-        navigate('/dashboard');
-      } else {
-        navigate('/setup-profile');
-      }
+      // Always navigate to dashboard after successful login
+      navigate('/dashboard');
     } catch (error) {
       console.error('Login error:', error);
       setError(error.message);

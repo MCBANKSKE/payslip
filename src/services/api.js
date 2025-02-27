@@ -1,21 +1,25 @@
 const API_BASE_URL = 'http://localhost:5000/api';
 
 const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access_token');
     return {
         'Content-Type': 'application/json',
-        'Authorization': token ? `Bearer ${token}` : ''  // Only add Authorization if token exists
+        'Authorization': token ? `Bearer ${token}` : ''
     };
 };
 
 // Handle API responses
 const handleResponse = async (response) => {
+    if (response.status === 204) {
+        return null;
+    }
+    
     const data = await response.json();
     if (!response.ok) {
-        // If the token is invalid, clear it and throw error
         if (response.status === 401) {
-            localStorage.removeItem('token');
+            localStorage.removeItem('access_token');
             localStorage.removeItem('user');
+            window.location.href = '/login';
         }
         throw new Error(data.message || 'API request failed');
     }
@@ -33,9 +37,8 @@ export const api = {
             body: JSON.stringify({ email, password })
         });
         const data = await handleResponse(response);
-        // Store the token
         if (data.access_token) {
-            localStorage.setItem('token', data.access_token);
+            localStorage.setItem('access_token', data.access_token);
             if (data.user) {
                 localStorage.setItem('user', JSON.stringify(data.user));
             }
@@ -43,16 +46,25 @@ export const api = {
         return data;
     },
 
+    register: async (userData) => {
+        const response = await fetch(`${API_BASE_URL}/auth/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(userData)
+        });
+        return handleResponse(response);
+    },
+
     logout: async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+            await fetch(`${API_BASE_URL}/auth/logout`, {
                 method: 'POST',
                 headers: getAuthHeaders()
             });
-            await handleResponse(response);
         } finally {
-            // Always clear local storage on logout attempt
-            localStorage.removeItem('token');
+            localStorage.removeItem('access_token');
             localStorage.removeItem('user');
         }
     },
@@ -60,7 +72,6 @@ export const api = {
     // Company Profile
     getCompanyProfile: async () => {
         const response = await fetch(`${API_BASE_URL}/profile/company`, {
-            method: 'GET',
             headers: getAuthHeaders()
         });
         return handleResponse(response);
@@ -78,7 +89,6 @@ export const api = {
     // Bank Profile
     getBankProfile: async () => {
         const response = await fetch(`${API_BASE_URL}/profile/bank`, {
-            method: 'GET',
             headers: getAuthHeaders()
         });
         return handleResponse(response);
@@ -89,6 +99,56 @@ export const api = {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify(profileData)
+        });
+        return handleResponse(response);
+    },
+
+    // Employees
+    getEmployees: async () => {
+        const response = await fetch(`${API_BASE_URL}/employees`, {
+            headers: getAuthHeaders()
+        });
+        return handleResponse(response);
+    },
+
+    createEmployee: async (employeeData) => {
+        const response = await fetch(`${API_BASE_URL}/employees`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(employeeData)
+        });
+        return handleResponse(response);
+    },
+
+    updateEmployee: async (id, employeeData) => {
+        const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(employeeData)
+        });
+        return handleResponse(response);
+    },
+
+    deleteEmployee: async (id) => {
+        const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        return handleResponse(response);
+    },
+
+    // Payslips
+    getRecentPayslips: async () => {
+        const response = await fetch(`${API_BASE_URL}/payslips/recent`, {
+            headers: getAuthHeaders()
+        });
+        return handleResponse(response);
+    },
+
+    // Bank Statements
+    getRecentStatements: async () => {
+        const response = await fetch(`${API_BASE_URL}/statements/recent`, {
+            headers: getAuthHeaders()
         });
         return handleResponse(response);
     }

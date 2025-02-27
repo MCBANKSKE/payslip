@@ -1,353 +1,296 @@
-import React, { useState } from 'react';
-import {
-  Container,
-  Paper,
-  TextField,
-  Button,
-  Grid,
-  Typography,
-  IconButton,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow
-} from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { format } from 'date-fns';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
+import React, { useState, useEffect } from 'react';
+import { Container, Form, Button, Row, Col, Card, Alert } from 'react-bootstrap';
+import axios from 'axios';
 
-const generateTransactionId = () => {
-  const timestamp = new Date().getTime().toString().slice(-6);
-  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-  return `TXN${timestamp}${random}`;
-};
-
-const BankStatementForm = ({ settings }) => {
+const BankStatementForm = () => {
   const [formData, setFormData] = useState({
-    account_holder: '',
-    account_number: '',
-    periodFrom: null,
-    periodTo: null,
-    transactions: [],
-    initialBalance: 0,
+    accountName: '',
+    accountNumber: '',
+    fromDate: '',
+    toDate: '',
+    transactions: []
   });
 
-  const [newTransaction, setNewTransaction] = useState({
-    date: null,
-    transaction_id: '',
-    description: '',
-    amount_in: '',
-    amount_out: '',
+  const [settings, setSettings] = useState({
+    bankName: '',
+    bankLogo: '',
+    currency: 'KES'
   });
+
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    // Load settings from localStorage
+    const savedSettings = localStorage.getItem('documentSettings');
+    if (savedSettings) {
+      setSettings(JSON.parse(savedSettings));
+    }
+
+    // Set default date range (last month)
+    const today = new Date();
+    const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+    setFormData(prev => ({
+      ...prev,
+      fromDate: lastYear.toISOString().slice(0, 10),
+      toDate: today.toISOString().slice(0, 10)
+    }));
+  }, []);
+
+  const validateDateRange = (fromDate, toDate) => {
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 365; // Maximum 1 year
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    if ((name === 'fromDate' || name === 'toDate') && formData.fromDate && formData.toDate) {
+      const dateToCheck = name === 'fromDate' ? value : formData.fromDate;
+      const otherDate = name === 'fromDate' ? formData.toDate : value;
+      
+      if (!validateDateRange(dateToCheck, otherDate)) {
+        setError('Date range cannot exceed 1 year');
+        return;
+      } else {
+        setError('');
+      }
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
   };
 
-  const handleTransactionChange = (e) => {
-    const { name, value } = e.target;
-    setNewTransaction(prev => ({
+  const handleAddTransaction = () => {
+    setFormData(prev => ({
       ...prev,
-      [name]: value
+      transactions: [
+        ...prev.transactions,
+        {
+          date: '',
+          description: '',
+          amount: '',
+          type: 'credit'
+        }
+      ]
     }));
   };
 
-  const calculateBalance = (transactions, initialBalance) => {
-    let balance = parseFloat(initialBalance);
-    return transactions.map(transaction => {
-      const amountIn = parseFloat(transaction.amount_in) || 0;
-      const amountOut = parseFloat(transaction.amount_out) || 0;
-      balance = balance + amountIn - amountOut;
-      return { ...transaction, balance: balance.toFixed(2) };
-    });
-  };
-
-  const addTransaction = () => {
-    if (!newTransaction.date || !newTransaction.description || 
-        (!newTransaction.amount_in && !newTransaction.amount_out)) {
-      alert('Please fill in the required transaction fields');
-      return;
-    }
-
-    if (newTransaction.amount_in && newTransaction.amount_out) {
-      alert('Please enter either an In amount or an Out amount, not both');
-      return;
-    }
-
-    const transactionToAdd = {
-      ...newTransaction,
-      date: format(newTransaction.date, 'yyyy-MM-dd'),
-      transaction_id: generateTransactionId(),
-      amount_in: newTransaction.amount_in || '0',
-      amount_out: newTransaction.amount_out || '0'
+  const handleTransactionChange = (index, field, value) => {
+    const updatedTransactions = [...formData.transactions];
+    updatedTransactions[index] = {
+      ...updatedTransactions[index],
+      [field]: value
     };
-
-    const updatedTransactions = [
-      ...formData.transactions,
-      transactionToAdd
-    ];
-
-    // Sort transactions by date
-    updatedTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    // Calculate balances
-    const transactionsWithBalance = calculateBalance(updatedTransactions, formData.initialBalance);
-
     setFormData(prev => ({
       ...prev,
-      transactions: transactionsWithBalance
+      transactions: updatedTransactions
     }));
-
-    // Reset new transaction form
-    setNewTransaction({
-      date: null,
-      transaction_id: '',
-      description: '',
-      amount_in: '',
-      amount_out: '',
-    });
   };
 
-  const removeTransaction = (index) => {
+  const handleRemoveTransaction = (index) => {
     const updatedTransactions = formData.transactions.filter((_, i) => i !== index);
-    const transactionsWithBalance = calculateBalance(updatedTransactions, formData.initialBalance);
     setFormData(prev => ({
       ...prev,
-      transactions: transactionsWithBalance
+      transactions: updatedTransactions
     }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!formData.account_holder || !formData.account_number || !formData.periodFrom || !formData.periodTo) {
-      alert('Please fill in all required fields');
+    setMessage('');
+    setError('');
+
+    if (!validateDateRange(formData.fromDate, formData.toDate)) {
+      setError('Date range cannot exceed 1 year');
       return;
     }
 
-    const requestData = {
-      ...formData,
-      bankName: settings.bankName,
-      currency: settings.currency,
-      bankLogo: settings.bankLogo,
-      periodFrom: format(formData.periodFrom, 'yyyy-MM-dd'),
-      periodTo: format(formData.periodTo, 'yyyy-MM-dd')
-    };
-
     try {
-      const response = await fetch('http://localhost:5000/generate-bank-statement', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData),
+      const response = await axios.post('http://localhost:5000/api/bank-statement/generate', {
+        ...formData,
+        ...settings
+      }, {
+        responseType: 'blob'
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate bank statement');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `bank_statement_${formData.account_number}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Error generating bank statement');
+      // Create a download link for the PDF
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `bank_statement_${formData.fromDate}_${formData.toDate}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      setMessage('Bank statement generated successfully!');
+      
+      // Clear transactions but keep account details
+      setFormData(prev => ({
+        ...prev,
+        transactions: []
+      }));
+    } catch (err) {
+      setError('Failed to generate bank statement. Please try again.');
+      console.error('Error:', err);
     }
   };
 
   return (
-    <Paper style={{ padding: 20, marginTop: 20 }}>
-      <Typography variant="h6" gutterBottom>
-        Bank Statement Generator
-      </Typography>
-      <form onSubmit={handleSubmit}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              fullWidth
-              label="Account Holder"
-              name="account_holder"
-              value={formData.account_holder}
-              onChange={handleInputChange}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              fullWidth
-              label="Account Number"
-              name="account_number"
-              value={formData.account_number}
-              onChange={handleInputChange}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DatePicker
-                label="Period From"
-                value={formData.periodFrom}
-                onChange={(date) => setFormData(prev => ({ ...prev, periodFrom: date }))}
-                renderInput={(params) => <TextField {...params} fullWidth required />}
-              />
-            </LocalizationProvider>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DatePicker
-                label="Period To"
-                value={formData.periodTo}
-                onChange={(date) => setFormData(prev => ({ ...prev, periodTo: date }))}
-                renderInput={(params) => <TextField {...params} fullWidth required />}
-              />
-            </LocalizationProvider>
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Initial Balance"
-              type="number"
-              name="initialBalance"
-              value={formData.initialBalance}
-              onChange={handleInputChange}
-              InputProps={{
-                startAdornment: <span>{settings.currency} </span>
-              }}
-            />
-          </Grid>
+    <Container className="mt-5">
+      <h2 className="text-center mb-4">Generate Bank Statement</h2>
+      {message && (
+        <Alert variant="success" className="mb-4">
+          {message}
+        </Alert>
+      )}
+      {error && (
+        <Alert variant="danger" className="mb-4">
+          {error}
+        </Alert>
+      )}
+      <Row className="justify-content-center">
+        <Col md={8}>
+          <Card className="shadow-sm">
+            <Card.Body>
+              <Form onSubmit={handleSubmit}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Account Name</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="accountName"
+                    value={formData.accountName}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </Form.Group>
 
-          {/* New Transaction Form */}
-          <Grid item xs={12}>
-            <Typography variant="h6" gutterBottom>
-              Add Transaction
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={2}>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DatePicker
-                label="Date"
-                value={newTransaction.date}
-                onChange={(date) => setNewTransaction(prev => ({ ...prev, date }))}
-                renderInput={(params) => <TextField {...params} fullWidth required />}
-              />
-            </LocalizationProvider>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              label="Description"
-              name="description"
-              value={newTransaction.description}
-              onChange={handleTransactionChange}
-            />
-          </Grid>
-          <Grid item xs={12} sm={2}>
-            <TextField
-              fullWidth
-              label="Amount In"
-              type="number"
-              name="amount_in"
-              value={newTransaction.amount_in}
-              onChange={handleTransactionChange}
-              InputProps={{
-                startAdornment: <span>{settings.currency} </span>
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={2}>
-            <TextField
-              fullWidth
-              label="Amount Out"
-              type="number"
-              name="amount_out"
-              value={newTransaction.amount_out}
-              onChange={handleTransactionChange}
-              InputProps={{
-                startAdornment: <span>{settings.currency} </span>
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={1}>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={addTransaction}
-              style={{ marginTop: 8 }}
-            >
-              <AddIcon />
-            </Button>
-          </Grid>
+                <Form.Group className="mb-3">
+                  <Form.Label>Account Number</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="accountNumber"
+                    value={formData.accountNumber}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </Form.Group>
 
-          {/* Transactions Table */}
-          <Grid item xs={12}>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>No.</TableCell>
-                    <TableCell>Date</TableCell>
-                    <TableCell>Transaction ID</TableCell>
-                    <TableCell align="right">In ({settings.currency})</TableCell>
-                    <TableCell align="right">Out ({settings.currency})</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell align="right">Balance ({settings.currency})</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>From Date</Form.Label>
+                      <Form.Control
+                        type="date"
+                        name="fromDate"
+                        value={formData.fromDate}
+                        onChange={handleInputChange}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>To Date</Form.Label>
+                      <Form.Control
+                        type="date"
+                        name="toDate"
+                        value={formData.toDate}
+                        onChange={handleInputChange}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <div className="mb-3">
+                  <h4>Transactions</h4>
                   {formData.transactions.map((transaction, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>{transaction.date}</TableCell>
-                      <TableCell>{transaction.transaction_id}</TableCell>
-                      <TableCell align="right">
-                        {parseFloat(transaction.amount_in) > 0 ? parseFloat(transaction.amount_in).toFixed(2) : '-'}
-                      </TableCell>
-                      <TableCell align="right">
-                        {parseFloat(transaction.amount_out) > 0 ? parseFloat(transaction.amount_out).toFixed(2) : '-'}
-                      </TableCell>
-                      <TableCell>{transaction.description}</TableCell>
-                      <TableCell align="right">{transaction.balance}</TableCell>
-                      <TableCell>
-                        <IconButton onClick={() => removeTransaction(index)}>
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
+                    <Card key={index} className="mb-3">
+                      <Card.Body>
+                        <Row>
+                          <Col md={3}>
+                            <Form.Group>
+                              <Form.Label>Date</Form.Label>
+                              <Form.Control
+                                type="date"
+                                value={transaction.date}
+                                onChange={(e) => handleTransactionChange(index, 'date', e.target.value)}
+                                required
+                              />
+                            </Form.Group>
+                          </Col>
+                          <Col md={4}>
+                            <Form.Group>
+                              <Form.Label>Description</Form.Label>
+                              <Form.Control
+                                type="text"
+                                value={transaction.description}
+                                onChange={(e) => handleTransactionChange(index, 'description', e.target.value)}
+                                required
+                              />
+                            </Form.Group>
+                          </Col>
+                          <Col md={3}>
+                            <Form.Group>
+                              <Form.Label>Amount ({settings?.currency || 'KES'})</Form.Label>
+                              <Form.Control
+                                type="number"
+                                value={transaction.amount}
+                                onChange={(e) => handleTransactionChange(index, 'amount', e.target.value)}
+                                required
+                              />
+                            </Form.Group>
+                          </Col>
+                          <Col md={2}>
+                            <Form.Group>
+                              <Form.Label>Type</Form.Label>
+                              <Form.Select
+                                value={transaction.type}
+                                onChange={(e) => handleTransactionChange(index, 'type', e.target.value)}
+                              >
+                                <option value="credit">Credit</option>
+                                <option value="debit">Debit</option>
+                              </Form.Select>
+                            </Form.Group>
+                          </Col>
+                        </Row>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => handleRemoveTransaction(index)}
+                        >
+                          Remove
+                        </Button>
+                      </Card.Body>
+                    </Card>
                   ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Grid>
+                  <Button
+                    variant="secondary"
+                    onClick={handleAddTransaction}
+                    className="mb-3"
+                  >
+                    Add Transaction
+                  </Button>
+                </div>
 
-          <Grid item xs={12}>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              fullWidth
-            >
-              Generate Bank Statement
-            </Button>
-          </Grid>
-        </Grid>
-      </form>
-    </Paper>
+                <div className="text-center">
+                  <Button type="submit" variant="primary">
+                    Generate Bank Statement
+                  </Button>
+                </div>
+              </Form>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+    </Container>
   );
 };
 

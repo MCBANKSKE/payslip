@@ -1,215 +1,150 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  Grid,
-  MenuItem,
-  IconButton,
-  Box,
-  Typography,
-  Alert
-} from '@mui/material';
-import SettingsIcon from '@mui/icons-material/Settings';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import { api } from '../services/api';
+import { Container, Form, Button, Row, Col, Card, Alert } from 'react-bootstrap';
 
-const currencies = [
-  { value: 'USD', label: '$ - US Dollar' },
-  { value: 'EUR', label: '€ - Euro' },
-  { value: 'GBP', label: '£ - British Pound' },
-  { value: 'KES', label: 'KSh - Kenyan Shilling' },
-  { value: 'UGX', label: 'USh - Ugandan Shilling' },
-  { value: 'TZS', label: 'TSh - Tanzanian Shilling' }
-];
-
-function Settings({ open, onClose, settings, onSave, type }) {
-  const [localSettings, setLocalSettings] = useState(settings);
-  const [companyLogo, setCompanyLogo] = useState(null);
-  const [bankLogo, setBankLogo] = useState(null);
-  const [error, setError] = useState('');
+const Settings = () => {
+  const [settings, setSettings] = useState({
+    companyLogo: '',
+    bankLogo: '',
+    currency: 'KES',
+    companyName: '',
+    bankName: ''
+  });
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
-    setLocalSettings(settings);
-  }, [settings]);
+    // Load saved settings from localStorage
+    const savedSettings = localStorage.getItem('documentSettings');
+    if (savedSettings) {
+      setSettings(JSON.parse(savedSettings));
+    }
+  }, []);
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setLocalSettings(prev => ({
+  const handleLogoChange = (e, type) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSettings(prev => ({
+          ...prev,
+          [type]: reader.result
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setSettings(prev => ({
       ...prev,
       [name]: value
     }));
   };
 
-  const handleLogoChange = async (event, type) => {
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        if (type === 'company') {
-          setCompanyLogo(e.target.result);
-          setLocalSettings(prev => ({
-            ...prev,
-            companyLogo: e.target.result
-          }));
-        } else {
-          setBankLogo(e.target.result);
-          setLocalSettings(prev => ({
-            ...prev,
-            bankLogo: e.target.result
-          }));
-        }
-      };
-      
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSave = async () => {
-    try {
-      setError('');
-      const response = type === 'bank' 
-        ? await api.updateBankProfile(localSettings)
-        : await api.updateCompanyProfile(localSettings);
-      
-      onSave(response.profile);
-      onClose();
-    } catch (err) {
-      console.error('Error saving settings:', err);
-      setError(err.message || 'Failed to save settings');
-    }
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    // Save settings to localStorage
+    localStorage.setItem('documentSettings', JSON.stringify(settings));
+    setMessage('Settings saved successfully!');
+    setTimeout(() => setMessage(''), 3000);
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Settings</DialogTitle>
-      <DialogContent>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        <Grid container spacing={3} sx={{ mt: 1 }}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              select
-              label="Currency"
-              name="currency"
-              value={localSettings.currency || 'USD'}
-              onChange={handleChange}
-            >
-              {currencies.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
+    <Container className="mt-5">
+      <h2 className="text-center mb-4">Document Settings</h2>
+      {message && (
+        <Alert variant="success" className="mb-4">
+          {message}
+        </Alert>
+      )}
+      <Row className="justify-content-center">
+        <Col md={8}>
+          <Card className="shadow-sm">
+            <Card.Body>
+              <Form onSubmit={handleSubmit}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Company Name</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="companyName"
+                    value={settings.companyName}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </Form.Group>
 
-          {type === 'bank' && (
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Bank Name"
-                name="bankName"
-                value={localSettings.bankName || ''}
-                onChange={handleChange}
-              />
-            </Grid>
-          )}
+                <Form.Group className="mb-3">
+                  <Form.Label>Company Logo</Form.Label>
+                  <Form.Control
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleLogoChange(e, 'companyLogo')}
+                  />
+                  {settings.companyLogo && (
+                    <img 
+                      src={settings.companyLogo} 
+                      alt="Company Logo" 
+                      className="mt-2"
+                      style={{ maxHeight: '100px' }}
+                    />
+                  )}
+                </Form.Group>
 
-          {type === 'payslip' && (
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Company Name"
-                name="companyName"
-                value={localSettings.companyName || ''}
-                onChange={handleChange}
-              />
-            </Grid>
-          )}
+                <Form.Group className="mb-3">
+                  <Form.Label>Bank Name</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="bankName"
+                    value={settings.bankName}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </Form.Group>
 
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              type="date"
-              label="Period From"
-              name="periodFrom"
-              value={localSettings.periodFrom || ''}
-              onChange={handleChange}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
+                <Form.Group className="mb-3">
+                  <Form.Label>Bank Logo</Form.Label>
+                  <Form.Control
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleLogoChange(e, 'bankLogo')}
+                  />
+                  {settings.bankLogo && (
+                    <img 
+                      src={settings.bankLogo} 
+                      alt="Bank Logo" 
+                      className="mt-2"
+                      style={{ maxHeight: '100px' }}
+                    />
+                  )}
+                </Form.Group>
 
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              type="date"
-              label="Period To"
-              name="periodTo"
-              value={localSettings.periodTo || ''}
-              onChange={handleChange}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
+                <Form.Group className="mb-3">
+                  <Form.Label>Currency</Form.Label>
+                  <Form.Select
+                    name="currency"
+                    value={settings.currency}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="KES">KES (Kenyan Shilling)</option>
+                    <option value="USD">USD (US Dollar)</option>
+                    <option value="EUR">EUR (Euro)</option>
+                    <option value="GBP">GBP (British Pound)</option>
+                  </Form.Select>
+                </Form.Group>
 
-          <Grid item xs={12} sm={6}>
-            <Typography variant="subtitle1" gutterBottom>
-              {type === 'payslip' ? 'Company Logo' : 'Bank Logo'}
-            </Typography>
-            <input
-              accept="image/*"
-              style={{ display: 'none' }}
-              id={`${type}-logo-upload`}
-              type="file"
-              onChange={(e) => handleLogoChange(e, type === 'payslip' ? 'company' : 'bank')}
-            />
-            <label htmlFor={`${type}-logo-upload`}>
-              <Button
-                variant="outlined"
-                component="span"
-                startIcon={<CloudUploadIcon />}
-              >
-                Upload Logo
-              </Button>
-            </label>
-            {((type === 'payslip' && companyLogo) || (type === 'bank' && bankLogo)) && (
-              <Box sx={{ mt: 2 }}>
-                <img
-                  src={type === 'payslip' ? companyLogo : bankLogo}
-                  alt={`${type} logo`}
-                  style={{ maxWidth: '200px', maxHeight: '100px' }}
-                />
-              </Box>
-            )}
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSave} variant="contained" color="primary">
-          Save Settings
-        </Button>
-      </DialogActions>
-    </Dialog>
+                <div className="text-center">
+                  <Button type="submit" variant="primary">
+                    Save Settings
+                  </Button>
+                </div>
+              </Form>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+    </Container>
   );
-}
-
-export function SettingsButton({ onClick }) {
-  return (
-    <IconButton 
-      onClick={onClick}
-      sx={{ 
-        position: 'absolute',
-        top: 8,
-        right: 8
-      }}
-    >
-      <SettingsIcon />
-    </IconButton>
-  );
-}
+};
 
 export default Settings;
