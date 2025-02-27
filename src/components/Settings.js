@@ -1,25 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Form, Button, Row, Col, Card, Alert } from 'react-bootstrap';
+import axios from 'axios';
 
 const Settings = () => {
   const [settings, setSettings] = useState({
-    companyLogo: '',
-    bankLogo: '',
-    currency: 'KES',
-    companyName: '',
-    bankName: ''
+    company_name: '',
+    company_logo: '',
+    bank_name: '',
+    bank_logo: '',
+    currency: 'KES'
   });
+
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // Load saved settings from localStorage
-    const savedSettings = localStorage.getItem('documentSettings');
-    if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
-    }
+    // Load settings from database
+    loadSettings();
   }, []);
 
-  const handleLogoChange = (e, type) => {
+  const loadSettings = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/settings');
+      if (response.data) {
+        setSettings(response.data);
+        // Also store in localStorage for quick access
+        localStorage.setItem('documentSettings', JSON.stringify(response.data));
+      }
+    } catch (err) {
+      console.error('Error loading settings:', err);
+      // Try loading from localStorage as fallback
+      const savedSettings = localStorage.getItem('documentSettings');
+      if (savedSettings) {
+        setSettings(JSON.parse(savedSettings));
+      }
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setSettings(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleLogoChange = async (e, type) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
@@ -33,20 +59,23 @@ const Settings = () => {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setSettings(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Save settings to localStorage
-    localStorage.setItem('documentSettings', JSON.stringify(settings));
-    setMessage('Settings saved successfully!');
-    setTimeout(() => setMessage(''), 3000);
+    setMessage('');
+    setError('');
+
+    try {
+      // Save to database
+      await axios.post('http://localhost:5000/api/settings', settings);
+      
+      // Update localStorage
+      localStorage.setItem('documentSettings', JSON.stringify(settings));
+      
+      setMessage('Settings saved successfully!');
+    } catch (err) {
+      setError('Failed to save settings. Please try again.');
+      console.error('Error:', err);
+    }
   };
 
   return (
@@ -55,6 +84,11 @@ const Settings = () => {
       {message && (
         <Alert variant="success" className="mb-4">
           {message}
+        </Alert>
+      )}
+      {error && (
+        <Alert variant="danger" className="mb-4">
+          {error}
         </Alert>
       )}
       <Row className="justify-content-center">
@@ -66,8 +100,8 @@ const Settings = () => {
                   <Form.Label>Company Name</Form.Label>
                   <Form.Control
                     type="text"
-                    name="companyName"
-                    value={settings.companyName}
+                    name="company_name"
+                    value={settings.company_name}
                     onChange={handleInputChange}
                     required
                   />
@@ -78,12 +112,12 @@ const Settings = () => {
                   <Form.Control
                     type="file"
                     accept="image/*"
-                    onChange={(e) => handleLogoChange(e, 'companyLogo')}
+                    onChange={(e) => handleLogoChange(e, 'company_logo')}
                   />
-                  {settings.companyLogo && (
-                    <img 
-                      src={settings.companyLogo} 
-                      alt="Company Logo" 
+                  {settings.company_logo && (
+                    <img
+                      src={settings.company_logo}
+                      alt="Company Logo"
                       className="mt-2"
                       style={{ maxHeight: '100px' }}
                     />
@@ -94,8 +128,8 @@ const Settings = () => {
                   <Form.Label>Bank Name</Form.Label>
                   <Form.Control
                     type="text"
-                    name="bankName"
-                    value={settings.bankName}
+                    name="bank_name"
+                    value={settings.bank_name}
                     onChange={handleInputChange}
                     required
                   />
@@ -106,12 +140,12 @@ const Settings = () => {
                   <Form.Control
                     type="file"
                     accept="image/*"
-                    onChange={(e) => handleLogoChange(e, 'bankLogo')}
+                    onChange={(e) => handleLogoChange(e, 'bank_logo')}
                   />
-                  {settings.bankLogo && (
-                    <img 
-                      src={settings.bankLogo} 
-                      alt="Bank Logo" 
+                  {settings.bank_logo && (
+                    <img
+                      src={settings.bank_logo}
+                      alt="Bank Logo"
                       className="mt-2"
                       style={{ maxHeight: '100px' }}
                     />
@@ -126,10 +160,10 @@ const Settings = () => {
                     onChange={handleInputChange}
                     required
                   >
-                    <option value="KES">KES (Kenyan Shilling)</option>
-                    <option value="USD">USD (US Dollar)</option>
-                    <option value="EUR">EUR (Euro)</option>
-                    <option value="GBP">GBP (British Pound)</option>
+                    <option value="KES">KES</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
                   </Form.Select>
                 </Form.Group>
 
